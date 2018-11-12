@@ -557,3 +557,47 @@ func (c *Client) SubmitTransaction(
 
 	return
 }
+
+// SubmitTransaction submits a transaction to the network. err can be either error object or horizon.Error object.
+func (c *Client) JdSubmitTransaction(
+	transactionEnvelopeXdr string,
+) (response TransactionSuccess, err error, problemResp *Problem) {
+	c.fixURLOnce.Do(c.fixURL)
+	v := url.Values{}
+	v.Set("tx", transactionEnvelopeXdr)
+
+	resp, err := c.HTTP.PostForm(c.URL+"/transactions", v)
+	if err != nil {
+		err = errors.Wrap(err, "http post failed")
+		return
+	}
+
+	if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
+		horizonError := &Error{
+			Response: resp,
+		}
+		problemResp = new(Problem)
+		err = jdDecodeResponse(resp, problemResp)
+		if err != nil {
+			err = errors.Wrap(err, "error decoding horizon.Problem")
+			return
+		}
+		err = horizonError
+		return
+	}
+
+
+	err = decodeResponse(resp, &response)
+	if err != nil {
+		return
+	}
+
+	// WARNING! Do not remove this code. If you include two trailing slashes (`//`) at the end of Client.URL
+	// and developers changed Client.HTTP to not follow redirects, this will return empty response and no error!
+	if resp.StatusCode != http.StatusOK {
+		err = errors.New("Invalid response code")
+		return
+	}
+
+	return
+}
